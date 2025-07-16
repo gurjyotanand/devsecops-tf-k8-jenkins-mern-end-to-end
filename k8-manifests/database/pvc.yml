@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mongo-pvc # PersistentVolumeClaim name
+spec:
+  accessModes:
+    - ReadWriteOnce # This is standard for block storage like EBS
+  resources:
+    requests:
+      storage: 5Gi # Request 5 GB of storage. Adjust as needed.
+  storageClassName: gp2 # Or gp3. This should be a pre-existing StorageClass in your EKS cluster.

@@ -1,0 +1,13 @@
+# k8s-manifests/database/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb-service # This name is how other pods will find the database
+spec:
+  selector:
+    app: mongodb # Selects pods with the label 'app: mongodb'
+  ports:
+    - protocol: TCP
+      port: 27017      # The port the service will be available on
+      targetPort: 27017 # The port on the pod to forward traffic to
+  type: ClusterIP # Only expose within the cluster

@@ -1,0 +1,13 @@
+# k8s-manifests/frontend/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-service
+spec:
+  selector:
+    app: mern-frontend
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+  type: ClusterIP # Expose internally, Ingress will manage external access

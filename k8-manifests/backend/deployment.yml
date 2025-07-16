@@ -1,0 +1,40 @@
+# k8s-manifests/backend/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-deployment
+  labels:
+    app: mern-backend
+spec:
+  replicas: 2 # Running 2 replicas for high availability
+  selector:
+    matchLabels:
+      app: mern-backend
+  template:
+    metadata:
+      labels:
+        app: mern-backend
+    spec:
+    serviceAccountName: ecr-access-sa
+      containers:
+      - name: backend
+        # !!! IMPORTANT: Replace this with your actual image path from ECR or Docker Hub !!!
+        image: YOUR-ACCOUNT-ID.dkr.ecr.us-east-1.amazonaws.com/backend:latest
+        ports:
+        - containerPort: 5050
+        env:
+        # The MONGO_URI needs to be updated to use the Kubernetes service and secret.
+        - name: MONGO_URI
+          valueFrom:
+            secretKeyRef:
+              name: mongo-secret
+              key: MONGO_INITDB_ROOT_USERNAME
+        - name: MONGO_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mongo-secret
+              key: MONGO_INITDB_ROOT_PASSWORD
+        # This combines the credentials with the Kubernetes service DNS name.
+        - name: MONGO_URI_FULL
+          value: "mongodb://$(MONGO_URI):$(MONGO_PASSWORD)@mongodb-service:27017/mydatabase?authSource=admin"
+        # Make sure your Node.js app uses process.env.MONGO_URI_FULL to connect.

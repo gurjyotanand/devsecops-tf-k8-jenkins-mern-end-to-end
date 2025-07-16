@@ -1,0 +1,24 @@
+# k8s-manifests/frontend/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend-deployment
+  labels:
+    app: mern-frontend
+spec:
+  replicas: 2 # Running 2 replicas for high availability
+  selector:
+    matchLabels:
+      app: mern-frontend
+  template:
+    metadata:
+      labels:
+        app: mern-frontend
+    spec:
+    serviceAccountName: ecr-access-sa
+      containers:
+      - name: frontend
+        # !!! IMPORTANT: Replace this with your actual image path from ECR or Docker Hub !!!
+        image: YOUR-ACCOUNT-ID.dkr.ecr.us-east-1.amazonaws.com/frontend:latest
+        ports:
+        - containerPort: 80

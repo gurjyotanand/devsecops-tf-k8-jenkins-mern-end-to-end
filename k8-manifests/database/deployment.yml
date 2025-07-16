@@ -1,0 +1,32 @@
+# k8s-manifests/database/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongodb-deployment
+  labels:
+    app: mongodb
+spec:
+  replicas: 1 # MongoDB isn't running as a replica set here, so only 1 pod
+  selector:
+    matchLabels:
+      app: mongodb
+  template:
+    metadata:
+      labels:
+        app: mongodb
+    spec:
+      containers:
+      - name: mongodb
+        image: mongo:latest # Using the official Mongo image
+        ports:
+        - containerPort: 27017
+        envFrom:
+        - secretRef:
+            name: mongo-secret # Injecting username and password from our secret
+        volumeMounts:
+        - name: mongo-persistent-storage
+          mountPath: /data/db # Mount the persistent volume to Mongo's data directory
+      volumes:
+      - name: mongo-persistent-storage
+        persistentVolumeClaim:
+          claimName: mongo-pvc # Use the PVC we defined
