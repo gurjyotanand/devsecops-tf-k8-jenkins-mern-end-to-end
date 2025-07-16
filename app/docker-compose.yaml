@@ -2,7 +2,7 @@
 services:
   backend:
     build: ./mern/backend
-    image: app-backend
+    image: mern-task-app-backend-prod-img 
     ports:
       - "5050:5050" 
     networks:
@@ -14,7 +14,7 @@ services:
 
   frontend:
     build: ./mern/frontend
-    image: app-frontend
+    image: mern-task-app-frontend-prod-img
     ports:
       - "80:80"  # Map host port 80 to Nginx container's port 80
     networks:
