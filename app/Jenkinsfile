@@ -86,7 +86,7 @@ pipeline {
                     dir('app') {
                         sh 'docker system prune -f'
                         sh 'docker container prune -f'
-                        sh 'docker-compose -f docker-compose.yml build'
+                        sh 'docker-compose -f docker-compose.yaml build'
                     }
                 }
             }
