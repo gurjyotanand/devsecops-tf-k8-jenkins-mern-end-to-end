@@ -93,17 +93,25 @@ pipeline {
         }
 // In the "Push Images To ECR" stage
 
+// In the "Push Images To ECR" stage
+
         stage("Push Images To ECR") {
             steps {
                 script {
-                    // CORRECTED: Use 'bash -c' to ensure the pipe works correctly.
-                    // Using single quotes for the outer 'sh' step is a best practice here.
-                    sh 'bash -c "aws ecr get-login-password --region ${AWS_DEFAULT_REGION} | docker login --username AWS --password-stdin ${REPOSITORY_URI}"'
+                    // ================== THE FIX ==================
+                    // This multiline script block ensures the pipe is handled correctly by a true bash shell.
+                    sh """
+                        #!/bin/bash
+                        set -e
+                        aws ecr get-login-password --region ${env.AWS_DEFAULT_REGION} | docker login --username AWS --password-stdin ${env.REPOSITORY_URI}
+                    """
+                    // =============================================
 
                     def services = ['frontend', 'backend'] 
 
                     services.each { service ->
-                        // IMPORTANT: Ensure this name matches your docker-compose.yaml image name
+                        // IMPORTANT: As noted before, ensure this matches your docker-compose.yaml image name.
+                        // The previous log showed 'app-frontend', so this is likely correct.
                         def localImageName = "app-${service}" 
                         def imageTag = "${env.REPOSITORY_URI}/${service}:${env.BUILD_NUMBER}"
                         
