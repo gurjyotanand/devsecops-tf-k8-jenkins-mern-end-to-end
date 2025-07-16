@@ -1,0 +1,59 @@
+properties([
+    parameters([
+        string(
+            defaultValue: 'prod',
+            name: 'Environment'
+        ),
+        choice(
+            choices: ['plan', 'apply', 'destroy'], 
+            name: 'Terraform_Action'
+        )])
+])
+pipeline {
+    agent any
+    stages {
+        stage('Preparing') {
+            steps {
+                sh 'echo Preparing'
+            }
+        }
+        stage('Git Pulling') {
+            steps {
+                git credentialsId: 'github-creds', branch: 'main', url: 'https://github.com/gurjyotanand/devsecops-tf-k8-jenkins-mern-end-to-end.git'
+
+            }
+        }
+        stage('Init') {
+            steps {
+                withAWS(credentials: 'aws-cred', region: 'us-east-1') {
+                sh 'terraform -chdir=infra-tf/ init -reconfigure'
+                }
+            }
+        }
+        stage('Validate') {
+            steps {
+                withAWS(credentials: 'aws-cred', region: 'us-east-1') {
+                sh 'terraform -chdir=infra-tf/ validate'
+                }
+            }
+        }
+        stage('Action') {
+            steps {
+                withAWS(credentials: 'aws-cred', region: 'us-east-1') {
+                    script {    
+                        if (params.Terraform_Action == 'plan') {
+                            sh "terraform -chdir=infra-tf/ plan -var-file=${params.Environment}.tfvars"
+                        }   else if (params.Terraform_Action == 'apply') {
+                            sh "terraform -chdir=infra-tf/ apply -var-file=${params.Environment}.tfvars -auto-approve"
+                        }   else if (params.Terraform_Action == 'destroy') {
+                            sh "terraform refresh"
+                            sh "terraform -chdir=infra-tf/ destroy -var-file=${params.Environment}.tfvars -auto-approve -parallelism=1"
+                        } else {
+                            error "Invalid value for Terraform_Action: ${params.Terraform_Action}"
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
