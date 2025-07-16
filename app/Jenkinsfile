@@ -9,7 +9,7 @@ pipeline {
         SCANNER_HOME=tool 'sonar-scanner'
         AWS_ACCOUNT_ID = credentials('aws-account-id')
         AWS_DEFAULT_REGION = 'us-east-1'
-        REPOSITORY_URI = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/"
+        REPOSITORY_URI = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"
     }
 
     stages {
@@ -91,18 +91,24 @@ pipeline {
                 }
             }
         }
-
+// Jenkinsfile
         stage("Push Images To ECR") {
             steps {
                 script {
-                    def REPOSITORY_URI = "${env.AWS_ACCOUNT_ID}.dkr.ecr.${env.AWS_DEFAULT_REGION}.amazonaws.com"
-                    sh "aws ecr get-login-password --region ${env.AWS_DEFAULT_REGION} | docker login --username AWS --password-stdin ${env.REPOSITORY_URI}"
+                    // CORRECTED: Used triple-double-quotes for the sh step
+                    // and used the environment variable 'env.REPOSITORY_URI' directly.
+                    sh """
+                        aws ecr get-login-password --region ${env.AWS_DEFAULT_REGION} | docker login --username AWS --password-stdin ${env.REPOSITORY_URI}
+                    """
 
                     def services = ['frontend', 'backend'] 
 
                     services.each { service ->
-                        def localImageName = "mern-task-app-${service}-prod-img"
-                        def imageTag = "${REPOSITORY_URI}/${service}:${env.BUILD_NUMBER}"
+                        // The local image name from your docker-compose file might be different.
+                        // You may need to adjust "mern-task-app-${service}-prod-img".
+                        // Based on your previous log, the image name is likely `app-frontend` and `app-backend`. Let's assume that.
+                        def localImageName = "app-${service}" // ADJUST THIS if your docker-compose image name is different
+                        def imageTag = "${env.REPOSITORY_URI}/${service}:${env.BUILD_NUMBER}"
                         
                         sh "docker tag ${localImageName} ${imageTag}"
                         sh "docker push ${imageTag}"
