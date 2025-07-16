@@ -1,0 +1,181 @@
+pipeline {
+    agent any 
+    tools {
+        jdk 'jdk'
+        nodejs 'nodejs'
+    }
+
+    environment  {
+        SCANNER_HOME=tool 'sonar-scanner'
+        AWS_ACCOUNT_ID = credentials('aws-account-id')
+        AWS_DEFAULT_REGION = 'us-east-1'
+        REPOSITORY_URI = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/"
+    }
+
+    stages {
+        stage('Clean Workspace') {
+            steps {
+                cleanWs()
+            }
+        }
+
+        stage('Git Checkout') {
+            steps {
+                git credentialsId: 'github-creds', 
+                    url: 'https://github.com/gurjyotanand/devsecops-tf-k8-jenkins-mern-end-to-end.git', 
+                    branch: 'main'
+            }
+        }
+
+        stage('Gitleaks Scan') {
+            steps {
+                script {
+                    sh '''
+                        docker run --rm -v $(pwd):/path zricethezav/gitleaks:latest detect \
+                            --source /path \
+                            --report-format json \
+                            --report-path /path/gitleaks-report.json || true
+                    '''
+                    
+                    archiveArtifacts artifacts: 'gitleaks-report.json', allowEmptyArchive: true
+                    
+                    sh '''
+                        if [ -f "gitleaks-report.json" ]; then
+                            cat gitleaks-report.json
+                        else
+                            echo "No Gitleaks report generated."
+                        fi
+                    '''
+                }
+            }
+        }
+
+        stage('SAST Analysis With Sonarqube') {
+            steps {
+                dir('app') {
+                    withSonarQubeEnv('sonar-server') {
+                        sh ''' $SCANNER_HOME/bin/sonar-scanner \
+                        -Dsonar.projectName=jenkins-task-app \
+                        -Dsonar.projectKey=jenkins-task-app '''
+                    }
+                }
+            }
+        }
+
+        stage('Quality Check') {
+            steps {
+                script {
+                    waitForQualityGate abortPipeline: true, credentialsId: 'sonar-token' 
+                }
+            }
+        }
+
+
+        stage('File System Scan With Trivy') {
+            steps {
+                dir('app') {
+                    sh 'trivy fs --format json --output trivyfs.json .'
+                    archiveArtifacts artifacts: 'trivyfs.json', onlyIfSuccessful: true
+                }
+            }
+        }
+
+        stage("Docker Images Build") {
+            steps {
+                script {
+                    dir('app') {
+                        sh 'docker system prune -f'
+                        sh 'docker container prune -f'
+                        sh 'docker-compose -f docker-compose.prod.yml build'
+                    }
+                }
+            }
+        }
+
+        stage("Push Images To ECR") {
+            steps {
+                script {
+                    def REPOSITORY_URI = "${env.AWS_ACCOUNT_ID}.dkr.ecr.${env.AWS_DEFAULT_REGION}.amazonaws.com"
+                    sh "aws ecr get-login-password --region ${env.AWS_DEFAULT_REGION} | docker login --username AWS --password-stdin ${env.REPOSITORY_URI}"
+
+                    def services = ['frontend', 'backend'] 
+
+                    services.each { service ->
+                        def localImageName = "mern-task-app-${service}-prod-img"
+                        def imageTag = "${REPOSITORY_URI}/${service}:${env.BUILD_NUMBER}"
+                        
+                        sh "docker tag ${localImageName} ${imageTag}"
+                        sh "docker push ${imageTag}"
+                    }
+                }
+            }
+        }
+
+        stage("Container Image Scan With Trivy") {
+            steps {
+                script {
+                    def services = ['frontend', 'backend']
+
+                    services.each { service ->
+                        def image = "${REPOSITORY_URI}${service}:${BUILD_NUMBER}"
+                        sh "trivy image --format json ${image} > trivy_${service}_image.json"
+                        archiveArtifacts artifacts: "trivy_${service}_image.json", onlyIfSuccessful: true
+                    }
+                }
+            }
+        }
+
+        stage('Update Deployment Files') {
+            environment {
+                GIT_REPO_NAME = "devsecops-tf-k8-jenkins-mern-end-to-end"
+                GIT_USER_EMAIL = credentials('git-user-email')
+            }
+            steps {
+                dir('k8-manifests') {
+                    script {
+                        def services = ['frontend', 'backend']
+
+                        services.each { service ->
+                            withCredentials([
+                                usernamePassword(
+                                    credentialsId: 'github-creds',
+                                    usernameVariable: 'GIT_USERNAME',
+                                    passwordVariable: 'GIT_TOKEN'
+                                )
+                            ]) {
+                                def files = sh(script: "find . -name 'deployment.yaml'", returnStdout: true).trim().split("\n")
+
+                                files.each { file ->
+                                    def imageTag = sh(
+                                        script: "grep -oP '(?<=${service}:)[^\\\"]+' ${file} || true",
+                                        returnStdout: true
+                                    ).trim()
+
+                                    if (imageTag) {
+                                        sh "sed -i 's|${service}:${imageTag}|${service}:${BUILD_NUMBER}|' ${file}"
+                                        sh '''
+                                            git config user.email "${GIT_USER_EMAIL}"
+                                            git config user.name "${GIT_USERNAME}"
+                                            git add ./frontend/deployment.yaml
+                                            git add ./backend/deployment.yaml
+                                            git commit -m "Update deployment image for ${service} to version ${BUILD_NUMBER}" || {
+                                                echo "No changes to commit for ${service}"
+                                            }
+                                            git push "@github.com/${GIT_USERNAME}/${GIT_REPO_NAME}.git">https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/${GIT_USERNAME}/${GIT_REPO_NAME}.git" HEAD:main
+                                        '''
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Clean Workspace After Build') {
+            steps {
+                cleanWs()
+            }
+        }
+    }
+}
