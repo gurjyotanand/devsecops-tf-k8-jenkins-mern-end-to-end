@@ -70,7 +70,6 @@ pipeline {
             }
         }
 
-
         stage('File System Scan With Trivy') {
             steps {
                 dir('app') {
@@ -91,27 +90,33 @@ pipeline {
                 }
             }
         }
-// In the "Push Images To ECR" stage
-
-// In the "Push Images To ECR" stage
 
         stage("Push Images To ECR") {
             steps {
                 script {
-                    // ================== THE FIX ==================
-                    // This multiline script block ensures the pipe is handled correctly by a true bash shell.
-                    sh """
-                        #!/bin/bash
-                        set -e
-                        aws ecr get-login-password --region ${env.AWS_DEFAULT_REGION} | docker login --username AWS --password-stdin ${env.REPOSITORY_URI}
-                    """
-                    // =============================================
+                    // SOLUTION 1: Use withAWS plugin (recommended)
+                    withAWS(region: "${AWS_DEFAULT_REGION}", credentials: 'aws-credentials') {
+                        sh """
+                            aws ecr get-login-password --region ${AWS_DEFAULT_REGION} | docker login --username AWS --password-stdin ${REPOSITORY_URI}
+                        """
+                    }
+                    
+                    // SOLUTION 2: Alternative - separate the commands
+                    // sh """
+                    //     aws ecr get-login-password --region ${AWS_DEFAULT_REGION} > /tmp/ecr_password
+                    //     cat /tmp/ecr_password | docker login --username AWS --password-stdin ${REPOSITORY_URI}
+                    //     rm /tmp/ecr_password
+                    // """
+                    
+                    // SOLUTION 3: Alternative - use Docker credential helper
+                    // sh """
+                    //     aws ecr get-login-password --region ${AWS_DEFAULT_REGION} | docker login --username AWS --password-stdin ${REPOSITORY_URI}
+                    // """
 
                     def services = ['frontend', 'backend'] 
 
                     services.each { service ->
-                        // IMPORTANT: As noted before, ensure this matches your docker-compose.yaml image name.
-                        // The previous log showed 'app-frontend', so this is likely correct.
+                        // IMPORTANT: Ensure this name matches your docker-compose.yaml image name
                         def localImageName = "app-${service}" 
                         def imageTag = "${env.REPOSITORY_URI}/${service}:${env.BUILD_NUMBER}"
                         
@@ -128,7 +133,7 @@ pipeline {
                     def services = ['frontend', 'backend']
 
                     services.each { service ->
-                        def image = "${REPOSITORY_URI}${service}:${BUILD_NUMBER}"
+                        def image = "${REPOSITORY_URI}/${service}:${BUILD_NUMBER}" // Fixed: Added missing slash
                         sh "trivy image --format json ${image} > trivy_${service}_image.json"
                         archiveArtifacts artifacts: "trivy_${service}_image.json", onlyIfSuccessful: true
                     }
@@ -172,7 +177,7 @@ pipeline {
                                             git commit -m "Update deployment image for ${service} to version ${BUILD_NUMBER}" || {
                                                 echo "No changes to commit for ${service}"
                                             }
-                                            git push "@github.com/${GIT_USERNAME}/${GIT_REPO_NAME}.git">https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/${GIT_USERNAME}/${GIT_REPO_NAME}.git" HEAD:main
+                                            git push "https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/${GIT_USERNAME}/${GIT_REPO_NAME}.git" HEAD:main
                                         '''
                                     }
                                 }
