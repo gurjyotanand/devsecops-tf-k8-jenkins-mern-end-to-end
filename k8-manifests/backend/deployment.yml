@@ -19,7 +19,7 @@ spec:
       containers:
       - name: backend
         # !!! IMPORTANT: Replace this with your actual image path from ECR or Docker Hub !!!
-        image: 078944522849.dkr.ecr.us-east-1.amazonaws.com/backend:23
+        image: 078944522849.dkr.ecr.us-east-1.amazonaws.com/backend:24
         ports:
         - containerPort: 5050
         env:
