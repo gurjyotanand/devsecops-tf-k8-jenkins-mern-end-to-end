@@ -220,36 +220,44 @@ pipeline {
 
         stage('Update Deployment Files') {
             environment {
+                // The repository name part of the URL
                 GIT_REPO_NAME = "devsecops-tf-k8-jenkins-mern-end-to-end"
+                // The email for the commit author metadata
                 GIT_USER_EMAIL = credentials('git-user-email')
             }
             steps {
-                // No 'dir' block here. All commands run from the workspace root.
+                // Fetch the GitHub username ('gurjyotanand') and the PAT from 'github-creds'
                 withCredentials([
                     usernamePassword(
                         credentialsId: 'github-creds',
-                        usernameVariable: 'GIT_USERNAME',
-                        passwordVariable: 'GIT_TOKEN'
+                        usernameVariable: 'GIT_HUB_USER',  // Will contain 'gurjyotanand'
+                        passwordVariable: 'GIT_TOKEN'      // Will contain the PAT
                     )
                 ]) {
                     sh '''
-                        # Configure git user at the repo root
+                        # Configure the commit author details
+                        # The email comes from your 'git-user-email' credential
+                        # The name will be your GitHub username 'gurjyotanand'
                         git config user.email "${GIT_USER_EMAIL}"
-                        git config user.name "${GIT_USERNAME}"
+                        git config user.name "${GIT_HUB_USER}"
 
-                        # Update deployment files using their full path from the root
+                        # Update deployment files (this part was already correct)
                         sed -i 's|image: .*/frontend:.*|image: ${REPOSITORY_URI}/frontend:${BUILD_NUMBER}|' k8-manifests/frontend/deployment.yml
                         sed -i 's|image: .*/backend:.*|image: ${REPOSITORY_URI}/backend:${BUILD_NUMBER}|' k8-manifests/backend/deployment.yml
 
-                        # Add files using their full path
+                        # Add the changed files
                         git add k8-manifests/frontend/deployment.yml k8-manifests/backend/deployment.yml
                         
                         # Check if there are changes to commit
                         if ! git diff-index --quiet HEAD; then
                             git commit -m "ci: Update deployment images to version ${BUILD_NUMBER}"
                             
-                            # Push changes from the repo root
-                            git push "https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/${GIT_USERNAME}/${GIT_REPO_NAME}.git" HEAD:main
+                            #
+                            # THE CRITICAL FIX IS HERE:
+                            # This builds the correct URL using your GitHub username for both authentication and the repo path.
+                            # It will resolve to: https://gurjyotanand:TOKEN@github.com/gurjyotanand/devsecops-tf-k8-jenkins...
+                            #
+                            git push "https://${GIT_HUB_USER}:${GIT_TOKEN}@github.com/${GIT_HUB_USER}/${GIT_REPO_NAME}.git" HEAD:main
                         else
                             echo "No changes in deployment files to commit."
                         fi
@@ -257,7 +265,6 @@ pipeline {
                 }
             }
         }
-
 
         stage('Clean Workspace After Build') {
             steps {
