@@ -175,7 +175,7 @@ pipeline {
             steps {
                 script {
                     // Use withCredentials for security and to make credentials available to the shell
-                    withCredentials([aws(accessKeyVariable: 'AWS_ACCESS_KEY_ID', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY', credentialsId: 'aws-creds')]) {
+                    withCredentials([aws(accessKeyVariable: 'AWS_ACCESS_KEY_ID', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY', credentialsId: 'aws-cred')]) {
                         // The insecure interpolation warning is fixed by using single quotes
                         sh 'aws ecr get-login-password --region ${AWS_DEFAULT_REGION} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com'
                     }
@@ -200,7 +200,7 @@ pipeline {
                     def services = ['frontend', 'backend']
 
                     // Wrap in withCredentials to ensure Trivy can pull from ECR
-                    withCredentials([aws(accessKeyVariable: 'AWS_ACCESS_KEY_ID', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY', credentialsId: 'aws-creds')]) {
+                    withCredentials([aws(accessKeyVariable: 'AWS_ACCESS_KEY_ID', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY', credentialsId: 'aws-cred')]) {
                         services.each { service ->
                             //
                             // <<< THE MAIN FIX IS HERE: Added the '/' >>>
