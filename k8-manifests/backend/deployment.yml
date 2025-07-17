@@ -15,7 +15,7 @@ spec:
       labels:
         app: mern-backend
     spec:
-    serviceAccountName: ecr-access-sa
+      serviceAccountName: ecr-access-sa
       containers:
       - name: backend
         # !!! IMPORTANT: Replace this with your actual image path from ECR or Docker Hub !!!
