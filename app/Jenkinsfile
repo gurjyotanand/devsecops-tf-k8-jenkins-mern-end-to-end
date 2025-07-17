@@ -199,7 +199,7 @@ pipeline {
                         script {
                             def services = ['frontend', 'backend']
 
-                            withCredentials([aws(accessKeyVariable: 'AWS_ACCESS_KEY_ID', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY', credentialsId: 'aws-creds')]) {
+                            withCredentials([aws(accessKeyVariable: 'AWS_ACCESS_KEY_ID', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY', credentialsId: 'aws-cred')]) {
                                 services.each { service ->
                                     def imageUri = "${env.REPOSITORY_URI}/${service}:${env.BUILD_NUMBER}"
                                     
