@@ -1,11 +1,12 @@
+# k8s-manifests/database/pvc.yaml
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: mongo-pvc # PersistentVolumeClaim name
+  name: mongo-pvc
 spec:
   accessModes:
-    - ReadWriteOnce # This is standard for block storage like EBS
+    - ReadWriteOnce
   resources:
     requests:
-      storage: 5Gi # Request 5 GB of storage. Adjust as needed.
-  storageClassName: gp2 # Or gp3. This should be a pre-existing StorageClass in your EKS cluster.
+      storage: 5Gi
+  storageClassName: gp3 # <-- THIS IS THE FIX. USE THE NEW STORAGE CLASS.
