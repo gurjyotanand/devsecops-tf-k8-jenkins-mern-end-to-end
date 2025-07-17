@@ -17,24 +17,24 @@ spec:
     spec:
       serviceAccountName: ecr-access-sa
       containers:
-      - name: backend
-        # !!! IMPORTANT: Replace this with your actual image path from ECR or Docker Hub !!!
-        image: 078944522849.dkr.ecr.us-east-1.amazonaws.com/backend:25
-        ports:
-        - containerPort: 5050
-        env:
-        # The MONGO_URI needs to be updated to use the Kubernetes service and secret.
-        - name: MONGO_URI
-          valueFrom:
-            secretKeyRef:
-              name: mongo-secret
-              key: MONGO_INITDB_ROOT_USERNAME
-        - name: MONGO_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: mongo-secret
-              key: MONGO_INITDB_ROOT_PASSWORD
-        # This combines the credentials with the Kubernetes service DNS name.
-        - name: MONGO_URI_FULL
-          value: "mongodb://$(MONGO_URI):$(MONGO_PASSWORD)@mongodb-service:27017/mydatabase?authSource=admin"
-        # Make sure your Node.js app uses process.env.MONGO_URI_FULL to connect.
+            - name: backend
+              image: 078944522849.dkr.ecr.us-east-1.amazonaws.com/backend:25 # Use your latest image tag
+              ports:
+              - containerPort: 5050
+              env:
+              # 1. Get the username from the secret using the correct key.
+              - name: DB_USER
+                valueFrom:
+                  secretKeyRef:
+                    name: mongo-secret
+                    key: MONGO_INITDB_ROOT_USERNAME # <-- This is the correct key from your secret
+              # 2. Get the password from the secret using the correct key.
+              - name: DB_PASSWORD
+                valueFrom:
+                  secretKeyRef:
+                    name: mongo-secret
+                    key: MONGO_INITDB_ROOT_PASSWORD # <-- This is the correct key from your secret
+              # 3. Construct the full, correct connection string using the variables above.
+              #    This is the ONLY variable your application code needs to know about.
+              - name: DATABASE_URL
+                value: "mongodb://$(DB_USER):$(DB_PASSWORD)@mongodb-service:27017/employees?authSource=admin"
