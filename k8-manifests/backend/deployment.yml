@@ -17,24 +17,23 @@ spec:
     spec:
       serviceAccountName: ecr-access-sa
       containers:
-            - name: backend
-              image: 078944522849.dkr.ecr.us-east-1.amazonaws.com/backend:25 # Use your latest image tag
-              ports:
-              - containerPort: 5050
-              env:
-              # 1. Get the username from the secret using the correct key.
-              - name: DB_USER
-                valueFrom:
-                  secretKeyRef:
-                    name: mongo-secret
-                    key: MONGO_INITDB_ROOT_USERNAME # <-- This is the correct key from your secret
-              # 2. Get the password from the secret using the correct key.
-              - name: DB_PASSWORD
-                valueFrom:
-                  secretKeyRef:
-                    name: mongo-secret
-                    key: MONGO_INITDB_ROOT_PASSWORD # <-- This is the correct key from your secret
-              # 3. Construct the full, correct connection string using the variables above.
-              #    This is the ONLY variable your application code needs to know about.
-              - name: DATABASE_URL
-                value: "mongodb://$(DB_USER):$(DB_PASSWORD)@mongodb-service:27017/employees?authSource=admin"
+      - name: backend
+        image: 078944522849.dkr.ecr.us-east-1.amazonaws.com/backend:latest # Use your latest image tag
+        ports:
+        - containerPort: 5050
+        env:
+        # Get the username from the secret.
+        - name: MONGO_USER # Using a temp name
+          valueFrom:
+            secretKeyRef:
+              name: mongo-secret
+              key: MONGO_INITDB_ROOT_USERNAME
+        # Get the password from the secret.
+        - name: MONGO_PASSWORD # Using a temp name
+          valueFrom:
+            secretKeyRef:
+              name: mongo-secret
+              key: MONGO_INITDB_ROOT_PASSWORD
+        # Construct the final, complete URL that the application will use.
+        - name: DATABASE_URL
+          value: "mongodb://$(MONGO_USER):$(MONGO_PASSWORD)@mongodb-service:27017/employees?authSource=admin"
