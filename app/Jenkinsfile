@@ -195,27 +195,27 @@ pipeline {
         }
 
         stage("Container Image Scan With Trivy") {
-            steps {
-                script {
-                    def services = ['frontend', 'backend']
+                    steps {
+                        script {
+                            def services = ['frontend', 'backend']
 
-                    // Wrap in withCredentials to ensure Trivy can pull from ECR
-                    withCredentials([aws(accessKeyVariable: 'AWS_ACCESS_KEY_ID', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY', credentialsId: 'aws-cred')]) {
-                        services.each { service ->
-                            //
-                            // <<< THE MAIN FIX IS HERE: Added the '/' >>>
-                            //
-                            def imageUri = "${env.REPOSITORY_URI}/${service}:${env.BUILD_NUMBER}"
-                            
-                            // Use single quotes to avoid interpolation warnings and pass AWS creds to trivy
-                            sh '''
-                                trivy image --format json --output trivy_${service}_image.json ${imageUri}
-                            '''
-                            archiveArtifacts artifacts: "trivy_${service}_image.json", allowEmptyArchive: true
+                            withCredentials([aws(accessKeyVariable: 'AWS_ACCESS_KEY_ID', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY', credentialsId: 'aws-creds')]) {
+                                services.each { service ->
+                                    def imageUri = "${env.REPOSITORY_URI}/${service}:${env.BUILD_NUMBER}"
+                                    
+                                    //
+                                    // <<< THE FIX IS HERE: Use triple DOUBLE quotes (""") >>>
+                                    // This allows Groovy to interpolate the variables.
+                                    //
+                                    sh """
+                                        trivy image --format json --output trivy_${service}_image.json "${imageUri}"
+                                    """
+                                    
+                                    archiveArtifacts artifacts: "trivy_${service}_image.json", allowEmptyArchive: true
+                                }
+                            }
                         }
                     }
-                }
-            }
         }
 
         stage('Update Deployment Files') {
