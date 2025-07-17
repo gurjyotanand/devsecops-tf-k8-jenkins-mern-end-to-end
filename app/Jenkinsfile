@@ -92,20 +92,103 @@ pipeline {
             }
         }
 
+        // stage("Push Images To ECR") {
+        //     steps {
+        //         script {
+        //             def REPOSITORY_URI = "${env.AWS_ACCOUNT_ID}.dkr.ecr.${env.AWS_DEFAULT_REGION}.amazonaws.com"
+        //             sh "aws ecr get-login-password --region ${env.AWS_DEFAULT_REGION} | docker login --username AWS --password-stdin ${env.REPOSITORY_URI}"
+
+        //             def services = ['frontend', 'backend'] 
+
+        //             services.each { service ->
+        //                 def localImageName = "mern-task-app-${service}-prod-img"
+        //                 def imageTag = "${REPOSITORY_URI}/${service}:${env.BUILD_NUMBER}"
+                        
+        //                 sh "docker tag ${localImageName} ${imageTag}"
+        //                 sh "docker push ${imageTag}"
+        //             }
+        //         }
+        //     }
+        // }
+
+        // stage("Container Image Scan With Trivy") {
+        //     steps {
+        //         script {
+        //             def services = ['frontend', 'backend']
+
+        //             services.each { service ->
+        //                 def image = "${env.REPOSITORY_URI}/${service}:${env.BUILD_NUMBER}"
+        //                 sh "trivy image --format json ${image} > trivy_${service}_image.json"
+        //                 archiveArtifacts artifacts: "trivy_${service}_image.json", onlyIfSuccessful: true
+        //             }
+        //         }
+        //     }
+        // }
+
+        // stage('Update Deployment Files') {
+        //     environment {
+        //         GIT_REPO_NAME = "devsecops-tf-k8-jenkins-mern-end-to-end"
+        //         GIT_USER_EMAIL = credentials('git-user-email')
+        //     }
+        //     steps {
+        //         dir('k8-manifests') {
+        //             script {
+        //                 def services = ['frontend', 'backend']
+
+        //                 services.each { service ->
+        //                     withCredentials([
+        //                         usernamePassword(
+        //                             credentialsId: 'github-creds',
+        //                             usernameVariable: 'GIT_USERNAME',
+        //                             passwordVariable: 'GIT_TOKEN'
+        //                         )
+        //                     ]) {
+        //                         def files = sh(script: "find . -name 'deployment.yaml'", returnStdout: true).trim().split("\n")
+
+        //                         files.each { file ->
+        //                             def imageTag = sh(
+        //                                 script: "grep -oP '(?<=${service}:)[^\\\"]+' ${file} || true",
+        //                                 returnStdout: true
+        //                             ).trim()
+
+        //                             if (imageTag) {
+        //                                 sh "sed -i 's|${service}:${imageTag}|${service}:${BUILD_NUMBER}|' ${file}"
+        //                                 sh '''
+        //                                     git config user.email "${GIT_USER_EMAIL}"
+        //                                     git config user.name "${GIT_USERNAME}"
+        //                                     git add ./frontend/deployment.yaml
+        //                                     git add ./backend/deployment.yaml
+        //                                     git commit -m "Update deployment image for ${service} to version ${BUILD_NUMBER}" || {
+        //                                         echo "No changes to commit for ${service}"
+        //                                     }
+        //                                     git push "@github.com/${GIT_USERNAME}/${GIT_REPO_NAME}.git">https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/${GIT_USERNAME}/${GIT_REPO_NAME}.git" HEAD:main
+        //                                 '''
+        //                             }
+        //                         }
+        //                     }
+        //                 }
+        //             }
+        //         }
+        //     }
+        // }
         stage("Push Images To ECR") {
             steps {
                 script {
-                    def REPOSITORY_URI = "${env.AWS_ACCOUNT_ID}.dkr.ecr.${env.AWS_DEFAULT_REGION}.amazonaws.com"
-                    sh "aws ecr get-login-password --region ${env.AWS_DEFAULT_REGION} | docker login --username AWS --password-stdin ${env.REPOSITORY_URI}"
+                    // Use withCredentials for security and to make credentials available to the shell
+                    withCredentials([aws(accessKeyVariable: 'AWS_ACCESS_KEY_ID', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY', credentialsId: 'aws-creds')]) {
+                        // The insecure interpolation warning is fixed by using single quotes
+                        sh 'aws ecr get-login-password --region ${AWS_DEFAULT_REGION} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com'
+                    }
 
                     def services = ['frontend', 'backend'] 
 
                     services.each { service ->
                         def localImageName = "mern-task-app-${service}-prod-img"
-                        def imageTag = "${REPOSITORY_URI}/${service}:${env.BUILD_NUMBER}"
+                        // Use env.REPOSITORY_URI for consistency
+                        def imageUri = "${env.REPOSITORY_URI}/${service}:${env.BUILD_NUMBER}"
                         
-                        sh "docker tag ${localImageName} ${imageTag}"
-                        sh "docker push ${imageTag}"
+                        sh "docker tag ${localImageName} ${imageUri}"
+                        sh "docker push ${imageUri}"
                     }
                 }
             }
@@ -116,10 +199,20 @@ pipeline {
                 script {
                     def services = ['frontend', 'backend']
 
-                    services.each { service ->
-                        def image = "${REPOSITORY_URI}${service}:${BUILD_NUMBER}"
-                        sh "trivy image --format json ${image} > trivy_${service}_image.json"
-                        archiveArtifacts artifacts: "trivy_${service}_image.json", onlyIfSuccessful: true
+                    // Wrap in withCredentials to ensure Trivy can pull from ECR
+                    withCredentials([aws(accessKeyVariable: 'AWS_ACCESS_KEY_ID', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY', credentialsId: 'aws-creds')]) {
+                        services.each { service ->
+                            //
+                            // <<< THE MAIN FIX IS HERE: Added the '/' >>>
+                            //
+                            def imageUri = "${env.REPOSITORY_URI}/${service}:${env.BUILD_NUMBER}"
+                            
+                            // Use single quotes to avoid interpolation warnings and pass AWS creds to trivy
+                            sh '''
+                                trivy image --format json --output trivy_${service}_image.json ${imageUri}
+                            '''
+                            archiveArtifacts artifacts: "trivy_${service}_image.json", allowEmptyArchive: true
+                        }
                     }
                 }
             }
@@ -127,50 +220,47 @@ pipeline {
 
         stage('Update Deployment Files') {
             environment {
+                // Assuming GIT_REPO_NAME is part of the repo URL you checked out
                 GIT_REPO_NAME = "devsecops-tf-k8-jenkins-mern-end-to-end"
                 GIT_USER_EMAIL = credentials('git-user-email')
             }
             steps {
-                dir('k8-manifests') {
-                    script {
-                        def services = ['frontend', 'backend']
+                // The 'k8-manifests' directory is not at the root, it's inside the checked-out repo
+                dir('devsecops-tf-k8-jenkins-mern-end-to-end/k8-manifests') {
+                    withCredentials([
+                        usernamePassword(
+                            credentialsId: 'github-creds',
+                            usernameVariable: 'GIT_USERNAME',
+                            passwordVariable: 'GIT_TOKEN'
+                        )
+                    ]) {
+                        sh '''
+                            # Configure git user
+                            git config user.email "${GIT_USER_EMAIL}"
+                            git config user.name "${GIT_USERNAME}"
 
-                        services.each { service ->
-                            withCredentials([
-                                usernamePassword(
-                                    credentialsId: 'github-creds',
-                                    usernameVariable: 'GIT_USERNAME',
-                                    passwordVariable: 'GIT_TOKEN'
-                                )
-                            ]) {
-                                def files = sh(script: "find . -name 'deployment.yaml'", returnStdout: true).trim().split("\n")
+                            # Update deployment files for both services
+                            sed -i 's|image: ${REPOSITORY_URI}/frontend:.*|image: ${REPOSITORY_URI}/frontend:${BUILD_NUMBER}|' ./frontend/deployment.yaml
+                            sed -i 's|image: ${REPOSITORY_URI}/backend:.*|image: ${REPOSITORY_URI}/backend:${BUILD_NUMBER}|' ./backend/deployment.yaml
 
-                                files.each { file ->
-                                    def imageTag = sh(
-                                        script: "grep -oP '(?<=${service}:)[^\\\"]+' ${file} || true",
-                                        returnStdout: true
-                                    ).trim()
-
-                                    if (imageTag) {
-                                        sh "sed -i 's|${service}:${imageTag}|${service}:${BUILD_NUMBER}|' ${file}"
-                                        sh '''
-                                            git config user.email "${GIT_USER_EMAIL}"
-                                            git config user.name "${GIT_USERNAME}"
-                                            git add ./frontend/deployment.yaml
-                                            git add ./backend/deployment.yaml
-                                            git commit -m "Update deployment image for ${service} to version ${BUILD_NUMBER}" || {
-                                                echo "No changes to commit for ${service}"
-                                            }
-                                            git push "@github.com/${GIT_USERNAME}/${GIT_REPO_NAME}.git">https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/${GIT_USERNAME}/${GIT_REPO_NAME}.git" HEAD:main
-                                        '''
-                                    }
-                                }
-                            }
-                        }
+                            # Add, commit, and push the changes ONCE
+                            git add ./frontend/deployment.yaml ./backend/deployment.yaml
+                            
+                            # Check if there are changes to commit
+                            if ! git diff-index --quiet HEAD; then
+                                git commit -m "ci: Update deployment images to version ${BUILD_NUMBER}"
+                                
+                                # Correct git push syntax
+                                git push "https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/${GIT_USERNAME}/${GIT_REPO_NAME}.git" HEAD:main
+                            else
+                                echo "No changes in deployment files to commit."
+                            fi
+                        '''
                     }
                 }
             }
         }
+
 
         stage('Clean Workspace After Build') {
             steps {
