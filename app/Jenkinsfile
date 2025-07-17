@@ -220,43 +220,40 @@ pipeline {
 
         stage('Update Deployment Files') {
             environment {
-                // Assuming GIT_REPO_NAME is part of the repo URL you checked out
                 GIT_REPO_NAME = "devsecops-tf-k8-jenkins-mern-end-to-end"
                 GIT_USER_EMAIL = credentials('git-user-email')
             }
             steps {
-                // The 'k8-manifests' directory is not at the root, it's inside the checked-out repo
-                dir('devsecops-tf-k8-jenkins-mern-end-to-end/k8-manifests') {
-                    withCredentials([
-                        usernamePassword(
-                            credentialsId: 'github-creds',
-                            usernameVariable: 'GIT_USERNAME',
-                            passwordVariable: 'GIT_TOKEN'
-                        )
-                    ]) {
-                        sh '''
-                            # Configure git user
-                            git config user.email "${GIT_USER_EMAIL}"
-                            git config user.name "${GIT_USERNAME}"
+                // No 'dir' block here. All commands run from the workspace root.
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'github-creds',
+                        usernameVariable: 'GIT_USERNAME',
+                        passwordVariable: 'GIT_TOKEN'
+                    )
+                ]) {
+                    sh '''
+                        # Configure git user at the repo root
+                        git config user.email "${GIT_USER_EMAIL}"
+                        git config user.name "${GIT_USERNAME}"
 
-                            # Update deployment files for both services
-                            sed -i 's|image: ${REPOSITORY_URI}/frontend:.*|image: ${REPOSITORY_URI}/frontend:${BUILD_NUMBER}|' ./frontend/deployment.yaml
-                            sed -i 's|image: ${REPOSITORY_URI}/backend:.*|image: ${REPOSITORY_URI}/backend:${BUILD_NUMBER}|' ./backend/deployment.yaml
+                        # Update deployment files using their full path from the root
+                        sed -i 's|image: .*/frontend:.*|image: ${REPOSITORY_URI}/frontend:${BUILD_NUMBER}|' k8-manifests/frontend/deployment.yml
+                        sed -i 's|image: .*/backend:.*|image: ${REPOSITORY_URI}/backend:${BUILD_NUMBER}|' k8-manifests/backend/deployment.yml
 
-                            # Add, commit, and push the changes ONCE
-                            git add ./frontend/deployment.yaml ./backend/deployment.yaml
+                        # Add files using their full path
+                        git add k8-manifests/frontend/deployment.yml k8-manifests/backend/deployment.yml
+                        
+                        # Check if there are changes to commit
+                        if ! git diff-index --quiet HEAD; then
+                            git commit -m "ci: Update deployment images to version ${BUILD_NUMBER}"
                             
-                            # Check if there are changes to commit
-                            if ! git diff-index --quiet HEAD; then
-                                git commit -m "ci: Update deployment images to version ${BUILD_NUMBER}"
-                                
-                                # Correct git push syntax
-                                git push "https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/${GIT_USERNAME}/${GIT_REPO_NAME}.git" HEAD:main
-                            else
-                                echo "No changes in deployment files to commit."
-                            fi
-                        '''
-                    }
+                            # Push changes from the repo root
+                            git push "https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/${GIT_USERNAME}/${GIT_REPO_NAME}.git" HEAD:main
+                        else
+                            echo "No changes in deployment files to commit."
+                        fi
+                    '''
                 }
             }
         }
