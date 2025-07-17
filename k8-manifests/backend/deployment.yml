@@ -18,7 +18,7 @@ spec:
       serviceAccountName: ecr-access-sa
       containers:
       - name: backend
-        image: 078944522849.dkr.ecr.us-east-1.amazonaws.com/backend:latest # Use your latest image tag
+        image: 078944522849.dkr.ecr.us-east-1.amazonaws.com/backend:27
         ports:
         - containerPort: 5050
         env:

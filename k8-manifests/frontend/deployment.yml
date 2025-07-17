@@ -19,6 +19,6 @@ spec:
       containers:
       - name: frontend
         # !!! IMPORTANT: Replace this with your actual image path from ECR or Docker Hub !!!
-        image: 078944522849.dkr.ecr.us-east-1.amazonaws.com/frontend:25
+        image: 078944522849.dkr.ecr.us-east-1.amazonaws.com/frontend:27
         ports:
         - containerPort: 80
