@@ -220,43 +220,39 @@ pipeline {
 
         stage('Update Deployment Files') {
             environment {
-                // The repository name part of the URL
                 GIT_REPO_NAME = "devsecops-tf-k8-jenkins-mern-end-to-end"
-                // The email for the commit author metadata
                 GIT_USER_EMAIL = credentials('git-user-email')
             }
             steps {
-                // Fetch the GitHub username ('gurjyotanand') and the PAT from 'github-creds'
                 withCredentials([
                     usernamePassword(
                         credentialsId: 'github-creds',
-                        usernameVariable: 'GIT_HUB_USER',  // Will contain 'gurjyotanand'
-                        passwordVariable: 'GIT_TOKEN'      // Will contain the PAT
+                        usernameVariable: 'GIT_HUB_USER',
+                        passwordVariable: 'GIT_TOKEN'
                     )
                 ]) {
                     sh '''
-                        # Configure the commit author details
-                        # The email comes from your 'git-user-email' credential
-                        # The name will be your GitHub username 'gurjyotanand'
+                        # Configure git with the user and email for the commit
                         git config user.email "${GIT_USER_EMAIL}"
                         git config user.name "${GIT_HUB_USER}"
 
-                        # Update deployment files (this part was already correct)
-                        sed -i 's|image: .*/frontend:.*|image: ${REPOSITORY_URI}/frontend:${BUILD_NUMBER}|' k8-manifests/frontend/deployment.yml
-                        sed -i 's|image: .*/backend:.*|image: ${REPOSITORY_URI}/backend:${BUILD_NUMBER}|' k8-manifests/backend/deployment.yml
+                        #
+                        # THE FIX IS HERE: Use double quotes ("") around the sed expression
+                        # This allows the shell to expand the Jenkins environment variables.
+                        #
+                        sed -i "s|image: .*/frontend:.*|image: ${REPOSITORY_URI}/frontend:${BUILD_NUMBER}|" k8-manifests/frontend/deployment.yml
+                        sed -i "s|image: .*/backend:.*|image: ${REPOSITORY_URI}/backend:${BUILD_NUMBER}|" k8-manifests/backend/deployment.yml
 
-                        # Add the changed files
+                        # Note: Your original pipeline added .yaml files but your sed command targets .yml files.
+                        # Make sure the filenames are consistent. Assuming .yml is correct based on the sed command.
                         git add k8-manifests/frontend/deployment.yml k8-manifests/backend/deployment.yml
                         
-                        # Check if there are changes to commit
+                        # This is a great practice to avoid empty commits if nothing changed.
                         if ! git diff-index --quiet HEAD; then
-                            git commit -m "ci: Update deployment images to version ${BUILD_NUMBER}"
+                            echo "Deployment files have changed. Committing and pushing..."
+                            git commit -m "ci: Update deployment images to build ${BUILD_NUMBER}"
                             
-                            #
-                            # THE CRITICAL FIX IS HERE:
-                            # This builds the correct URL using your GitHub username for both authentication and the repo path.
-                            # It will resolve to: https://gurjyotanand:TOKEN@github.com/gurjyotanand/devsecops-tf-k8-jenkins...
-                            #
+                            # Push to the main branch using the credentials
                             git push "https://${GIT_HUB_USER}:${GIT_TOKEN}@github.com/${GIT_HUB_USER}/${GIT_REPO_NAME}.git" HEAD:main
                         else
                             echo "No changes in deployment files to commit."
