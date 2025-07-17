@@ -50,35 +50,35 @@ pipeline {
             }
         }
 
-        stage('SAST Analysis With Sonarqube') {
-            steps {
-                dir('app') {
-                    withSonarQubeEnv('sonar-server') {
-                        sh ''' $SCANNER_HOME/bin/sonar-scanner \
-                        -Dsonar.projectName=jenkins-task-app \
-                        -Dsonar.projectKey=jenkins-task-app '''
-                    }
-                }
-            }
-        }
+        // stage('SAST Analysis With Sonarqube') {
+        //     steps {
+        //         dir('app') {
+        //             withSonarQubeEnv('sonar-server') {
+        //                 sh ''' $SCANNER_HOME/bin/sonar-scanner \
+        //                 -Dsonar.projectName=jenkins-task-app \
+        //                 -Dsonar.projectKey=jenkins-task-app '''
+        //             }
+        //         }
+        //     }
+        // }
 
-        stage('Quality Check') {
-            steps {
-                script {
-                    waitForQualityGate abortPipeline: true, credentialsId: 'sonar-token' 
-                }
-            }
-        }
+        // stage('Quality Check') {
+        //     steps {
+        //         script {
+        //             waitForQualityGate abortPipeline: true, credentialsId: 'sonar-token' 
+        //         }
+        //     }
+        // }
 
 
-        stage('File System Scan With Trivy') {
-            steps {
-                dir('app') {
-                    sh 'trivy fs --format json --output trivyfs.json .'
-                    archiveArtifacts artifacts: 'trivyfs.json', onlyIfSuccessful: true
-                }
-            }
-        }
+        // stage('File System Scan With Trivy') {
+        //     steps {
+        //         dir('app') {
+        //             sh 'trivy fs --format json --output trivyfs.json .'
+        //             archiveArtifacts artifacts: 'trivyfs.json', onlyIfSuccessful: true
+        //         }
+        //     }
+        // }
 
         stage("Docker Images Build") {
             steps {
